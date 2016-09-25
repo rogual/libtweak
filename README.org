@@ -34,7 +34,7 @@ TWEAK(float, temperature, 0, 100)
 
 #+END_SRC
 
-Use them like ordinary floats:
+Use them like ordinary variables:
 
 #+BEGIN_SRC c++
 
@@ -78,15 +78,15 @@ To do this:
 3. Define =TWEAK_BAKE= before including =<tweak.h>=. This tells
    =tweak.h= to use the constants from your generated header file.
 
-4. Do not link to =libtweak.a=
+4. No need to link to =libtweak.a=
 
 For example:
 
 #+BEGIN_SRC c++
 
 #ifdef MY_PRODUCTION_FLAG
-#include "myconstants.h"
-#define TWEAK_BAKE
+#  include "myconstants.h"
+#  define TWEAK_BAKE
 #endif
 
 #include <tweak.h>
@@ -137,6 +137,11 @@ Define a tweakable parameter. If =TWEAK_BAKE= is defined this simply defines
 a constant. Otherwise, it defines a const reference to a value, which
 may change when you call =tweak::process=.
 
+*** =#define EXTERN_TWEAK(type, name)=
+
+Use this to refer to a tweakable parameter defined in another translation
+unit.
+
 *** =void tweak::init()=
 
 Sets all parameters to their initial values. Reads the =Tweakfile= or
@@ -182,28 +187,44 @@ Both =Tweakfile= and =Tweakfifo= have the same format: a list of lines
 where each line is a command name followed by a space-separated list
 of arguments. Possible commands are:
 
+** =type NAME TYPE=
+
+Specifies the type of a parameter. Every parameter must have a type. By
+default, the available types are =int=, =float=, =string= and =bool=. You
+can also add your own types; see [[Extending][Extending]].
+
 ** =set NAME VALUE=
 
 Specifies a value for a paramater. See [[Value Format][Value Format]].
 
 ** =range NAME MIN MAX=
 
-Specifies the range for a parameter. This is only used by the GUI tool
-to display an appropriate GUI; values are not validated.
+Specifies the range for a parameter. Only applies to =int= and =float=
+parameters. This is only used by the GUI tool to display an
+appropriate GUI; =libtweak= itself ignores =range= commands.
 
 * Value Format
 
-Values are formatted accordingly:
+Values are converted to and from strings for storage in =Tweakfile= and
+transmission through =Tweakfifo=. How a value is converted to and from a
+string depends on its type:
 
 ** =int=, =float=
 
 These are read by the C++ formatted extraction operators and so are
 dependent on your locale.
 
+** =bool=
+
+=0= or =1=.
+
 ** =string=
 
 Strings begin with a literal =$= character, and end at the end of the
 line. They may contain any characters except newlines.
+
+(This is a strange format, but it's very easy to parse and leaves the door
+open to implement proper delimited strings later.)
 
 * Extending
 
@@ -228,8 +249,8 @@ so, you need to:
     This is the name that will be used in =type= commands in the =Tweakfile=.
 
 2. If necessary, specialize the =io= struct so =libtweak= knows how to load
-   and save your type. If you don't do this, the standard iostream =<<= and
-   =>>= operators will be used. You can overload these instead of specializing
+   and save your type. If you don't do this, the standard =iostream= ‘<<’ and
+   ‘>>’ operators will be used. You can overload these instead of specializing
    =io=.
 
    #+BEGIN_SRC C++
@@ -251,6 +272,40 @@ That's enough for =libtweak= to handle your type. You can now use it in
 However, the tools =tweak= and =tweakc= will not yet be able to
 intelligently handle your type.
 
+** =tweak=, =tweakc= and custom types
+
+By default, =tweak= will show a text entry field for any type it doesn't
+know about, allowing you to modify the raw textual representation of the
+parameter's value (as used by =load= and =save=).
+
+=tweakc= will take a shot at emitting C++ code for your type, but don't hold
+your breath.
+
+You can override these default behaviours by putting some code in a
+=tweak_ext.py= file alongside your =Tweakfile=:
+
+#+BEGIN_SRC python
+
+import tweak
+
+class MyWidget(tweak.Widget):
+    "..."
+
+class MyType(tweak.Param):
+    widget = MyWidget
+
+    def cname(self):
+        return "c++ type name here"
+
+    def cvalue(self):
+        return "c++ value of self.value here"
+
+tweak.types['mytypename'] = MyType
+
+#+END_SRC
+
+For guidance on implementing your own type and widget classes, see the existing
+classes in =bin/tweak=.
 
 * Further Work
 

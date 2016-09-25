@@ -4,6 +4,9 @@
     #define TWEAK(type, name) \
         using tweak_baked::name;
 
+    #define EXTERN_TWEAK(type, name) \
+        TWEAK(type, name)
+
     namespace tweak
     {
         inline void init() {}
@@ -14,6 +17,9 @@
 
     #define TWEAK(type, name) \
         const type &name = tweak::define<type>(#name);
+
+    #define EXTERN_TWEAK(type, name) \
+        extern const type &name;
 
     #include <map>
     #include <string>

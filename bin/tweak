@@ -6,6 +6,21 @@ from collections import defaultdict
 from functools import partial
 
 
+
+def load_extensions():
+
+    import sys
+    sys.modules['tweak'] = sys.modules[__name__]
+
+    from importlib.machinery import SourceFileLoader
+    try:
+        tweak_ext = SourceFileLoader("tweak_ext", "tweak_ext.py").load_module()
+        print(tweak_ext)
+    except FileNotFoundError:
+        pass
+
+
+
 fifo = None
 
 def send(param):
@@ -22,6 +37,31 @@ def send(param):
     if fifo:
         print('set %s %s' % (name, value), file=fifo)
         fifo.flush()
+
+
+def read_tweakfile(path):
+    params = defaultdict(dict)
+
+    with open(path, "rt") as tf:
+        for line in tf:
+            line = line.strip()
+            if line:
+                line = line.split(' ', 2)
+                cmd, name, blob = line
+                params[name]['name'] = name
+                if cmd == 'set':
+                    value = blob
+                    params[name]['value'] = value
+                elif cmd == 'range':
+                    args = blob.split(' ')
+                    minv, maxv = map(float, args)
+                    params[name]['range'] = minv, maxv
+                elif cmd == 'type':
+                    t, = blob.split(' ')
+                    params[name]['type'] = t
+    return params
+
+
 
 class Widget:
     def __init__(self, param):
@@ -53,7 +93,7 @@ class ScaleWidget(Widget):
         self.tk_widget.set(float(s))
 
 
-class StringWidget(Widget):
+class RawStringWidget(Widget):
     def __init__(self, root, param):
         super().__init__(param)
         self.var = ui.StringVar()
@@ -68,38 +108,41 @@ class StringWidget(Widget):
     def trace(self, *a, **kw):
         self.update(self.var.get())
 
-    def update(self, value):
-        super().update('$' + value)
-
     def set(self, value):
         self.tk_widget.delete(0, ui.END)
         self.tk_widget.insert(0, value)
 
     def set_str(self, s):
+        self.set(s)
+
+
+class StringWidget(RawStringWidget):
+    def update(self, value):
+        super().update('$' + value)
+
+    def set_str(self, s):
         self.set(s[1:])
+
+
+widget_for_type = defaultdict(
+    lambda: RawStringWidget,
+    {
+        'string': StringWidget,
+        'float': ScaleWidget,
+        'int': ScaleWidget
+    }
+)
+
+
+def make_widget(param):
+    return widget_for_type[param['type']](root, param)
 
 
 if __name__ == '__main__':
 
-    params = defaultdict(dict)
+    load_extensions()
 
-    with open("Tweakfile", "rt") as tf:
-        for line in tf:
-            line = line.strip()
-            if line:
-                line = line.split(' ', 2)
-                cmd, name, blob = line
-                params[name]['name'] = name
-                if cmd == 'set':
-                    value = blob
-                    params[name]['value'] = value
-                elif cmd == 'range':
-                    args = blob.split(' ')
-                    minv, maxv = map(float, args)
-                    params[name]['range'] = minv, maxv
-                elif cmd == 'type':
-                    t, = blob.split(' ')
-                    params[name]['type'] = t
+    params = read_tweakfile("Tweakfile")
 
     initial = {k: p['value'] for k, p in params.items()}
 
@@ -139,16 +182,10 @@ if __name__ == '__main__':
 
     for i, (name, param) in enumerate(sorted(params.items())):
 
-        range = param.get('range', (0, 100))
-        minv, maxv = range
-
         w = ui.Label(root, text=name)
         w.grid(row=i, column=0)
 
-        if param['type'] == 'string':
-            w = StringWidget(root, param)
-        else:
-            w = ScaleWidget(root, param)
+        w = make_widget(param)
 
         w.tk_widget.grid(row=i, column=1, sticky=ui.W+ui.E)
         widgets[name] = w
@@ -156,10 +193,10 @@ if __name__ == '__main__':
     ui.Grid.columnconfigure(root, 1, weight=1)
 
     w = btn_save = ui.Button(root, text='Save Changes', command=update_file)
-    w.grid(row=i+1, column=0, sticky=ui.W+ui.E)
+    w.grid(row=i+1, column=0, columnspan=2, sticky=ui.W+ui.E)
 
     w = btn_reset = ui.Button(root, text='Reset', command=reset, state=ui.DISABLED)
-    w.grid(row=i+1, column=1, sticky=ui.W+ui.E)
+    w.grid(row=i+2, column=0, columnspan=2, sticky=ui.W+ui.E)
 
     root.mainloop()
 

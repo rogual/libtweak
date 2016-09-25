@@ -10,6 +10,7 @@ namespace tweak
     string type_name<float>::get() { return "float"; }
     string type_name<int>::get() { return "int"; }
     string type_name<string>::get() { return "string"; }
+    string type_name<bool>::get() { return "bool"; }
 
     void io<string>::load(string &value, std::istream &is)
     {

@@ -106,6 +106,7 @@
 
         ITEM(float)
         ITEM(int)
+        ITEM(bool)
         ITEM(std::string)
 
         #undef ITEM

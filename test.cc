@@ -5,9 +5,10 @@
 #include <fcntl.h>
 #include "include/tweak.h"
 
-TWEAK(int, thing)
-TWEAK(float, cats)
+TWEAK(float, alertness)
+TWEAK(int, num_cats)
 TWEAK(std::string, tuesday)
+TWEAK(bool, boosters_enabled)
 
 int main(int argc, char **argv)
 {
@@ -16,7 +17,11 @@ int main(int argc, char **argv)
     for (;;) {
         tweak::process();
         std::cout << "\x1b[2K\r"; // clear line
-        std::cout << "thing=" << thing << "  cats=" << cats << "  tuesday=" << tuesday;
+        std::cout <<
+            "alertness=" << alertness <<
+            "  cats=" << num_cats <<
+            "  tuesday=" << tuesday <<
+            "  boosters=" << boosters_enabled;
         std::cout.flush();
         usleep(50);
     }

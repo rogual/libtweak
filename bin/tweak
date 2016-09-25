@@ -22,6 +22,7 @@ def load_extensions():
 
 
 fifo = None
+btn_reset = None
 
 def send(param):
     name = param['name']
@@ -37,6 +38,9 @@ def send(param):
     if fifo:
         print('set %s %s' % (name, value), file=fifo)
         fifo.flush()
+
+    if btn_reset and value != initial[name]:
+        btn_reset.config(state=ui.NORMAL)
 
 
 def read_tweakfile(path):
@@ -71,9 +75,6 @@ class Widget:
         self.param['value'] = value
         send(self.param)
 
-        if value != initial[name]:
-            btn_reset.config(state=ui.NORMAL)
-
 
 class ScaleWidget(Widget):
     def __init__(self, root, param):
@@ -84,7 +85,7 @@ class ScaleWidget(Widget):
             from_=minv,
             to=maxv,
             orient=ui.HORIZONTAL,
-            resolution=0,
+            resolution=1 if param['type'] == 'int' else 0,
             command=self.update
         )
         self.set_str(param.get('value', '0'))
@@ -124,12 +125,35 @@ class StringWidget(RawStringWidget):
         self.set(s[1:])
 
 
+class ToggleWidget(Widget):
+    def __init__(self, root, param):
+        super().__init__(param)
+        self.var = ui.IntVar()
+        self.var.trace('w', self.trace)
+
+        w = self.tk_widget = ui.Checkbutton(
+            root,
+            variable=self.var
+        )
+        self.set_str(param.get('value', '0'))
+
+    def trace(self, *a, **kw):
+        self.update(self.var.get())
+
+    def set_str(self, s):
+        if s == '0':
+            self.tk_widget.deselect()
+        if s == '1':
+            self.tk_widget.select()
+
+
 widget_for_type = defaultdict(
     lambda: RawStringWidget,
     {
         'string': StringWidget,
         'float': ScaleWidget,
-        'int': ScaleWidget
+        'int': ScaleWidget,
+        'bool': ToggleWidget
     }
 )
 
@@ -160,7 +184,6 @@ if __name__ == '__main__':
                     p['value'] = nv
                     send(p)
                     widgets[k].set_str(nv)
-                    print('reset', k, nv)
 
         btn_reset.config(state=ui.DISABLED)
 

@@ -3,37 +3,27 @@
 #include <fstream>
 #include <vector>
 
+#include "../include/tweak.h"
+
 #include "util.h"
 
 namespace tweak_util
 {
-    FloatMap &get_float_map() {
-        static FloatMap float_map;
-        return float_map;
-    }
-
     static void cmd_set(std::istream &ss)
     {
         std::string name;
         ss >> name;
 
-        float value;
-        ss >> value;
+        tweak::Params &params = tweak::get_params();
 
-        FloatMap &float_map = get_float_map();
-
-        auto it = float_map.find(name);
-        if (it == float_map.end()) {
+        auto it = params.find(name);
+        if (it == params.end()) {
             puts("set: bad name");
         }
         else
         {
-            it->second->value = value;
+            it->second->load(ss);
         }
-    }
-
-    static void cmd_range(std::istream &ss)
-    {
     }
 
     static void process_message(const std::string &msg)
@@ -45,11 +35,6 @@ namespace tweak_util
 
         if (command == "set")
             cmd_set(ss);
-        else if (command == "range")
-            cmd_range(ss);
-        else {
-            puts("bad cmd");
-        }
     }
 
     void process_bytes(const char *buf, size_t sz)
@@ -68,41 +53,66 @@ namespace tweak_util
 
     void update_tweakfile()
     {
-        std::map<std::string, float> file_values;
-        std::vector<std::string> range_cmds;
+        std::map<std::string, std::string> file_values;
+        std::vector<std::string> pass_through;
 
         {
             std::ifstream is("Tweakfile");
             while (is.good()) {
                 std::string line;
                 std::getline(is, line);
+
+                if (line.empty())
+                    continue;
+
                 std::istringstream ss(line);
 
                 std::string cmd;
                 ss >> cmd;
                 if (cmd == "set") {
                     std::string name;
-                    float value;
-                    ss >> name >> value;
-                    file_values[name] = value;
+                    ss >> name;
+                    file_values[name] = line;
                 }
-                else
-                    range_cmds.push_back(line);
+                else if (cmd != "type")
+                    pass_through.push_back(line);
             }
         }
 
         std::ofstream os("Tweakfile");
-        FloatMap &float_map = get_float_map();
-        for (auto cmd: range_cmds)
-            os << cmd << "\n";
-        for (auto item: float_map) {
+
+        // Types
+        tweak::Params &params = tweak::get_params();
+        for (auto item: params) {
             const std::string &name = item.first;
-            FloatParam param = *(item.second);
+            tweak::base_param &param = *item.second;
+            os << "type " << name << " " << param.get_type_name() <<
+                "\n";
+        }
+        os << "\n";
+
+        // Values
+        for (auto item: params) {
+            const std::string &name = item.first;
+            tweak::base_param &param = *item.second;
+
             auto it = file_values.find(name);
             if (it != file_values.end()) {
-                param.value = it->second;
+                // Keep value from file
+                os << it->second << "\n";
             }
-            os << "set " << name << " " << param.value << "\n";
+            else {
+                // Write default value to file
+                os << "set " << name << " ";
+                param.save(os);
+                os << "\n";
+            }
         }
+        os << "\n";
+
+        // Leave all other lines in file
+        for (auto cmd: pass_through)
+            os << cmd << "\n";
+
     }
 }

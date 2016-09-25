@@ -5,32 +5,13 @@ import tkinter as ui
 from collections import defaultdict
 from functools import partial
 
-params = defaultdict(dict)
-
-
-with open("Tweakfile", "rt") as tf:
-    for line in tf:
-        line = line.strip()
-        if line:
-            line = line.split(' ')
-            cmd, name, *args = line
-            if cmd == 'set':
-                value, = map(float, args)
-                params[name]['value'] = value
-            elif cmd == 'range':
-                minv, maxv = map(float, args)
-                params[name]['range'] = minv, maxv
-
-initial = {k: p['value'] for k, p in params.items()}
-
-root = ui.Tk()
-root.title("Parameters")
-
-job = None
-
 
 fifo = None
-def send(name, value):
+
+def send(param):
+    name = param['name']
+    value = param['value']
+
     global fifo
     if not fifo:
         # FIXME: Possible race condition. Not sure how to
@@ -42,72 +23,143 @@ def send(name, value):
         print('set %s %s' % (name, value), file=fifo)
         fifo.flush()
 
+class Widget:
+    def __init__(self, param):
+        self.param = param
 
-def reset():
-    for k, p in params.items():
-        if k in initial:
-            v = p['value']
-            nv = initial[k]
-            if nv != v:
-                p['value'] = nv
-                send(k, nv)
-                scales[k].set(nv)
-                print(k, nv)
-
-    btn_reset.config(state=ui.DISABLED)
-
-
-def update_file():
-    with open('Tweakfile', 'wt') as tf:
-        for name, param in params.items():
-            range = param.get('range')
-            if range:
-                minv, maxv = range
-                print('range %s %s %s' % (name, minv, maxv), file=tf)
-
-            value = param['value']
-            print('set %s %s' % (name, value), file=tf)
-
-
-scales = {}
-for i, (name, param) in enumerate(sorted(params.items())):
-
-    range = param.get('range', (0, 100))
-    minv, maxv = range
-
-    w = ui.Label(root, text=name)
-    w.grid(row=i, column=0)
-
-
-    def update(name, value):
-        value = float(value)
-
-        params[name]['value'] = value
-        send(name, value)
+    def update(self, value):
+        self.param['value'] = value
+        send(self.param)
 
         if value != initial[name]:
             btn_reset.config(state=ui.NORMAL)
 
 
-    w = ui.Scale(
-        root, 
-        from_=minv,
-        to=maxv,
-        orient=ui.HORIZONTAL,
-        resolution=0,
-        command=partial(update, name)
-    )
-    w.set(param['value'])
-    w.grid(row=i, column=1, sticky=ui.W+ui.E)
-    scales[name] = w
+class ScaleWidget(Widget):
+    def __init__(self, root, param):
+        super().__init__(param)
+        minv, maxv = param.get('range', (-100, 100))
+        w = self.tk_widget = ui.Scale(
+            root,
+            from_=minv,
+            to=maxv,
+            orient=ui.HORIZONTAL,
+            resolution=0,
+            command=self.update
+        )
+        self.set_str(param.get('value', '0'))
 
-ui.Grid.columnconfigure(root, 1, weight=1)
+    def set_str(self, s):
+        self.tk_widget.set(float(s))
 
-w = btn_save = ui.Button(root, text='Save Changes', command=update_file)
-w.grid(row=i+1, column=0, sticky=ui.W+ui.E)
 
-w = btn_reset = ui.Button(root, text='Reset', command=reset, state=ui.DISABLED)
-w.grid(row=i+1, column=1, sticky=ui.W+ui.E)
+class StringWidget(Widget):
+    def __init__(self, root, param):
+        super().__init__(param)
+        self.var = ui.StringVar()
+        self.var.trace('w', self.trace)
 
-root.mainloop()
+        w = self.tk_widget = ui.Entry(
+            root,
+            textvariable=self.var
+        )
+        self.set_str(param.get('value', '$'))
+
+    def trace(self, *a, **kw):
+        self.update(self.var.get())
+
+    def update(self, value):
+        super().update('$' + value)
+
+    def set(self, value):
+        self.tk_widget.delete(0, ui.END)
+        self.tk_widget.insert(0, value)
+
+    def set_str(self, s):
+        self.set(s[1:])
+
+
+if __name__ == '__main__':
+
+    params = defaultdict(dict)
+
+    with open("Tweakfile", "rt") as tf:
+        for line in tf:
+            line = line.strip()
+            if line:
+                line = line.split(' ', 2)
+                cmd, name, blob = line
+                params[name]['name'] = name
+                if cmd == 'set':
+                    value = blob
+                    params[name]['value'] = value
+                elif cmd == 'range':
+                    args = blob.split(' ')
+                    minv, maxv = map(float, args)
+                    params[name]['range'] = minv, maxv
+                elif cmd == 'type':
+                    t, = blob.split(' ')
+                    params[name]['type'] = t
+
+    initial = {k: p['value'] for k, p in params.items()}
+
+    root = ui.Tk()
+    root.title("Parameters")
+
+    widgets = {}
+
+    def reset():
+        for k, p in params.items():
+            if k in initial:
+                v = p['value']
+                nv = initial[k]
+                if nv != v:
+                    p['value'] = nv
+                    send(p)
+                    widgets[k].set_str(nv)
+                    print('reset', k, nv)
+
+        btn_reset.config(state=ui.DISABLED)
+
+
+    def update_file():
+        with open('Tweakfile', 'wt') as tf:
+            for name, param in params.items():
+                type = param['type']
+                print('type %s %s' % (name, type))
+
+                range = param.get('range')
+                if range:
+                    minv, maxv = range
+                    print('range %s %s %s' % (name, minv, maxv), file=tf)
+
+                value = param['value']
+                print('set %s %s' % (name, value), file=tf)
+
+
+    for i, (name, param) in enumerate(sorted(params.items())):
+
+        range = param.get('range', (0, 100))
+        minv, maxv = range
+
+        w = ui.Label(root, text=name)
+        w.grid(row=i, column=0)
+
+        if param['type'] == 'string':
+            w = StringWidget(root, param)
+        else:
+            w = ScaleWidget(root, param)
+
+        w.tk_widget.grid(row=i, column=1, sticky=ui.W+ui.E)
+        widgets[name] = w
+
+    ui.Grid.columnconfigure(root, 1, weight=1)
+
+    w = btn_save = ui.Button(root, text='Save Changes', command=update_file)
+    w.grid(row=i+1, column=0, sticky=ui.W+ui.E)
+
+    w = btn_reset = ui.Button(root, text='Reset', command=reset, state=ui.DISABLED)
+    w.grid(row=i+1, column=1, sticky=ui.W+ui.E)
+
+    root.mainloop()
 

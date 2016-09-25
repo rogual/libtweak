@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
-values = []
+from collections import defaultdict
+
+params = defaultdict(dict)
 
 with open("Tweakfile", "rt") as tf:
     for line in tf:
@@ -8,17 +10,41 @@ with open("Tweakfile", "rt") as tf:
         if line:
             line = line.split(' ')
             cmd, name, *args = line
-            if cmd == 'set':
-                value, = map(float, args)
-                values.append((name, value))
+            if cmd == 'type':
+                t, = args
+                params[name]['type'] = t
+            elif cmd == 'set':
+                value, = args
+                params[name]['value'] = value
+
+def ctype(param):
+    t = param['type']
+    if t == 'string':
+        return 'std::string'
+    return t
+
+def cvalue(param):
+    t = param['type']
+    v = param['value']
+    if t == 'string':
+        return '"' + v[1:].replace('\\', '\\\\').replace('"', '\\"') + '"'
+    return v
+
+def cdecl(name, param):
+    return 'const %s %s = %s;' % (
+        ctype(param),
+        name,
+        cvalue(param)
+    )
 
 print('''
 namespace tweak_baked
 {
 %s
 }
-''' % '\n'.join(
-    '  const float %s = %s;' % (
-        name, value
-    ) for name, value in values
-))
+''' % (
+    '\n'.join(
+        '  ' + cdecl(name, param)
+        for name, param in params.items())
+    ) 
+)

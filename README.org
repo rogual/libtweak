@@ -29,8 +29,8 @@ Declare tweakable parameters in your program:
 
 #include <tweak.h>
 
-TWEAK_FLOAT(sausage_length, 1, 20)
-TWEAK_FLOAT(temperature, 0, 100)
+TWEAK(float, sausage_length, 1, 20)
+TWEAK(float, temperature, 0, 100)
 
 #+END_SRC
 
@@ -52,13 +52,7 @@ void do_frame()
 
 #+END_SRC
 
-While your program is running, adjust parameters using the CLI:
-
-#+BEGIN_SRC sh
-tweak-set sausage_length 15.5
-#+END_SRC
-
-Or the GUI:
+While your program is running, adjust parameters using the GUI:
 
 #+BEGIN_SRC sh
 tweak
@@ -107,8 +101,7 @@ program called =test=. This program will define some parameters and
 continuously output them to the terminal.
 
 To try out libtweak, run this program and, while it's running, use
-=tweak-set= or =tweak= to adjust its parameters and see them update
-live.
+=tweak= to adjust its parameters and see them update live.
 
 
 * Internals
@@ -138,14 +131,11 @@ writes them out in the form of a C++ header.
 
 ** =tweak.h=
 
-*** =#define TWEAK_FLOAT(name, min, max)=
+*** =#define TWEAK(type, name)=
 
-Define a float parameter. If =TWEAK_BAKE= is defined this simply defines
-a constant. Otherwise, it defines a const reference to a float. The
-float's value may change when you call =tweak::process=.
-
-=min= and =max= should be float literals, and =name= should be an
-identifier (not a string).
+Define a tweakable parameter. If =TWEAK_BAKE= is defined this simply defines
+a constant. Otherwise, it defines a const reference to a value, which
+may change when you call =tweak::process=.
 
 *** =void tweak::init()=
 
@@ -179,18 +169,6 @@ working directory.
 
 Starts a GUI for tweaking the program's parameters.
 
-** =tweak-set NAME VALUE=
-
-Set one parameter.
-
-=NAME=
-    The parameter name as given to =TWEAK_FLOAT=.
-
-=VALUE=
-    Floating-point value to use. This will be read by C++'s
-    formatted extraction functions, and so will be parsed according to
-    your current locale.
-
 ** =tweakc=
 
 Writes the current values of all parameters, formatted as a C++ header
@@ -206,12 +184,73 @@ of arguments. Possible commands are:
 
 ** =set NAME VALUE=
 
-Specifies a value for a paramater.
+Specifies a value for a paramater. See [[Value Format][Value Format]].
 
 ** =range NAME MIN MAX=
 
 Specifies the range for a parameter. This is only used by the GUI tool
 to display an appropriate GUI; values are not validated.
+
+* Value Format
+
+Values are formatted accordingly:
+
+** =int=, =float=
+
+These are read by the C++ formatted extraction operators and so are
+dependent on your locale.
+
+** =string=
+
+Strings begin with a literal =$= character, and end at the end of the
+line. They may contain any characters except newlines.
+
+* Extending
+
+You can add support for your own custom types to =libtweak=. To do
+so, you need to:
+
+1. Specialize the =type_name= struct so =libtweak= knows what your
+   type is called:
+
+    #+BEGIN_SRC C++
+
+    namespace tweak
+    {
+        template<> struct type_name<MyType>
+        {
+            static std::string get() { return "mytype"; }
+        }
+    }
+
+    #+END_SRC
+
+    This is the name that will be used in =type= commands in the =Tweakfile=.
+
+2. If necessary, specialize the =io= struct so =libtweak= knows how to load
+   and save your type. If you don't do this, the standard iostream =<<= and
+   =>>= operators will be used. You can overload these instead of specializing
+   =io=.
+
+   #+BEGIN_SRC C++
+
+   namespace tweak
+   {
+     template<> struct io<MyType>
+     {
+       static void load(MyType &value, std::istream &is) { /* ... */ }
+       static void save(const MyType &value, std::ostream &os) { /* ... */ }
+     }
+   }
+        
+   #+END_SRC
+
+That's enough for =libtweak= to handle your type. You can now use it in
+=TWEAK= declarations.
+
+However, the tools =tweak= and =tweakc= will not yet be able to
+intelligently handle your type.
+
 
 * Further Work
 
@@ -225,12 +264,3 @@ In production mode (with =TWEAK_BAKE= defined), Windows is supported,
 as =libtweak= becomes a trivial header-only library in that case. So,
 it's still possible to develop your program on Unix and support
 Windows as a release target.
-
-** Parameters other than floats
-
-Other parameter types that may be useful:
-
-Integers
-Strings
-Vectors
-Colours

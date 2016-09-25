@@ -2,10 +2,18 @@
 #include "sys.h"
 #include "util.h"
 
+#include "../include/tweak.h"
+
 namespace tweak
 {
     namespace sys = tweak_sys;
     namespace util = tweak_util;
+
+    Params &get_params()
+    {
+        static Params params;
+        return params;
+    }
 
     void process()
     {
@@ -20,21 +28,10 @@ namespace tweak
         sys::read_tweakfile();
     }
 
-    float &register_float(const char *name)
+    void define(const std::string &name, base_param &param)
     {
-        using namespace util;
-
-        FloatMap &float_map = get_float_map();
-
-        FloatParam *&p = float_map[std::string(name)];
-
-        if (!p) {
-            p = new FloatParam;
-            p->value = 0;
-        }
-
-        return p->value;
+        base_param *&x = get_params()[name];
+        assert (x == 0);
+        x = &param;
     }
-
 }
-

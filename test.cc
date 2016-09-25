@@ -1,12 +1,13 @@
+#include <string>
 #include <cstdlib>
 #include <unistd.h>
 #include <iostream>
 #include <fcntl.h>
 #include "include/tweak.h"
 
-TWEAK_FLOAT(thing)
-TWEAK_FLOAT(cats)
-TWEAK_FLOAT(tuesday)
+TWEAK(int, thing)
+TWEAK(float, cats)
+TWEAK(std::string, tuesday)
 
 int main(int argc, char **argv)
 {

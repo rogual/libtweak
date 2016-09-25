@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+
+import os.path
+import tkinter as ui
+from collections import defaultdict
+from functools import partial
+
+params = defaultdict(dict)
+
+
+with open("Tweakfile", "rt") as tf:
+    for line in tf:
+        line = line.strip()
+        if line:
+            line = line.split(' ')
+            cmd, name, *args = line
+            if cmd == 'set':
+                value, = map(float, args)
+                params[name]['value'] = value
+            elif cmd == 'range':
+                minv, maxv = map(float, args)
+                params[name]['range'] = minv, maxv
+
+initial = {k: p['value'] for k, p in params.items()}
+
+root = ui.Tk()
+root.title("Parameters")
+
+job = None
+
+
+fifo = None
+def send(name, value):
+    global fifo
+    if not fifo:
+        # FIXME: Possible race condition. Not sure how to
+        # “open for writing if exists” in Python
+        if os.path.exists("Tweakfifo"):
+            fifo = open("Tweakfifo", "wt")
+
+    if fifo:
+        print('set %s %s' % (name, value), file=fifo)
+        fifo.flush()
+
+
+def reset():
+    for k, p in params.items():
+        if k in initial:
+            v = p['value']
+            nv = initial[k]
+            if nv != v:
+                p['value'] = nv
+                send(k, nv)
+                scales[k].set(nv)
+                print(k, nv)
+
+    btn_reset.config(state=ui.DISABLED)
+
+
+def update_file():
+    with open('Tweakfile', 'wt') as tf:
+        for name, param in params.items():
+            range = param.get('range')
+            if range:
+                minv, maxv = range
+                print('range %s %s %s' % (name, minv, maxv), file=tf)
+
+            value = param['value']
+            print('set %s %s' % (name, value), file=tf)
+
+
+scales = {}
+for i, (name, param) in enumerate(sorted(params.items())):
+
+    range = param.get('range', (0, 100))
+    minv, maxv = range
+
+    w = ui.Label(root, text=name)
+    w.grid(row=i, column=0)
+
+
+    def update(name, value):
+        value = float(value)
+
+        params[name]['value'] = value
+        send(name, value)
+
+        if value != initial[name]:
+            btn_reset.config(state=ui.NORMAL)
+
+
+    w = ui.Scale(
+        root, 
+        from_=minv,
+        to=maxv,
+        orient=ui.HORIZONTAL,
+        resolution=0,
+        command=partial(update, name)
+    )
+    w.set(param['value'])
+    w.grid(row=i, column=1, sticky=ui.W+ui.E)
+    scales[name] = w
+
+ui.Grid.columnconfigure(root, 1, weight=1)
+
+w = btn_save = ui.Button(root, text='Save Changes', command=update_file)
+w.grid(row=i+1, column=0, sticky=ui.W+ui.E)
+
+w = btn_reset = ui.Button(root, text='Reset', command=reset, state=ui.DISABLED)
+w.grid(row=i+1, column=1, sticky=ui.W+ui.E)
+
+root.mainloop()
+

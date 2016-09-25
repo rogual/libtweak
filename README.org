@@ -1,0 +1,236 @@
+#+TITLE: libtweak
+
+* Abstract
+
+=libtweak= lets you define parameters that can be adjusted while your
+C++ program is running. It is particularly suited to realtime
+applications like games, where you want instant feedback when making
+changes.
+
+- Supported languages: C++11
+- Supported platforms
+  - Full Support: Linux, Mac
+  - Production mode only: All other platfoms
+- Extra Requirements: Python 3
+
+* Compiling
+
+Run =make=. Find =libtweak.a= in =build/= and link your program with
+it. Add libtweak's =include= directory to your header file search path.
+
+The examples below will also assume that libtweak's =bin= directory is
+on your =PATH=.
+
+* Usage
+
+Declare tweakable parameters in your program:
+
+#+BEGIN_SRC c++
+
+#include <tweak.h>
+
+TWEAK_FLOAT(sausage_length, 1, 20)
+TWEAK_FLOAT(temperature, 0, 100)
+
+#+END_SRC
+
+Use them like ordinary floats:
+
+#+BEGIN_SRC c++
+
+int main()
+{
+  tweak::init();
+  // ...
+}
+
+void do_frame()
+{
+  tweak::process();
+  printf("The sausages are %fcm long and %f°C!", sausage_length, temperature);
+}
+
+#+END_SRC
+
+While your program is running, adjust parameters using the CLI:
+
+#+BEGIN_SRC sh
+tweak-set sausage_length 15.5
+#+END_SRC
+
+Or the GUI:
+
+#+BEGIN_SRC sh
+tweak
+#+END_SRC
+
+* Production Mode
+
+When distributing your program, you can build a version where =libtweak=
+is not linked in, and your parameters compile to ordinary constants.
+
+To do this:
+
+1. Generate a header file with the constants baked in:
+
+    #+BEGIN_SRC sh
+
+    tweakc > myconstants.h
+
+    #+END_SRC
+
+2. Include this file before =<tweak.h>=.
+
+3. Define =TWEAK_BAKE= before including =<tweak.h>=. This tells
+   =tweak.h= to use the constants from your generated header file.
+
+4. Do not link to =libtweak.a=
+
+For example:
+
+#+BEGIN_SRC c++
+
+#ifdef MY_PRODUCTION_FLAG
+#include "myconstants.h"
+#define TWEAK_BAKE
+#endif
+
+#include <tweak.h>
+
+#+END_SRC
+
+
+* Test Program
+
+As well as compiling =libtweak= itself, =make= will also compile a test
+program called =test=. This program will define some parameters and
+continuously output them to the terminal.
+
+To try out libtweak, run this program and, while it's running, use
+=tweak-set= or =tweak= to adjust its parameters and see them update
+live.
+
+
+* Internals
+
+When your program calls =tweak::init=, a file named =Tweakfile= is
+written to the working directory, detailing the available parameters
+and their values. A Unix FIFO called =Tweakfifo= is also created.
+
+The next time your program starts, values are read from the existing
+=Tweakfile=.
+
+Additionally, when you call =tweak::process=, commands are read from
+the =Tweakfifo= and used to update parameter values.
+
+Tools that update values do two things:
+1. Update the =Tweakfile= so the program will see the value when it is
+   next started.
+
+2. Write a value change command to the =Tweakfifo= so the program can
+   instantly update that value on its next call to =tweak::process=.
+
+The =tweakc= tool simply reads parameter values from the =Tweakfile= and
+writes them out in the form of a C++ header.
+
+
+* API Reference
+
+** =tweak.h=
+
+*** =#define TWEAK_FLOAT(name, min, max)=
+
+Define a float parameter. If =TWEAK_BAKE= is defined this simply defines
+a constant. Otherwise, it defines a const reference to a float. The
+float's value may change when you call =tweak::process=.
+
+=min= and =max= should be float literals, and =name= should be an
+identifier (not a string).
+
+*** =void tweak::init()=
+
+Sets all parameters to their initial values. Reads the =Tweakfile= or
+creates one if not present. Sets up the mechanism for live updating
+(=Tweakfifo=).
+
+You'll usually want to call this early in your program's startup, or
+at least before you call =tweak::process= for the first time.
+
+If =TWEAK_BAKE= is defined, =tweak::init= is a no-op and your compiler
+will optimize out any calls to it.
+
+*** =void tweak::process()=
+
+Check for new live-update messages and update any parameters. You'll
+want to call this frequently during execution of your program.
+
+In games, you can afford to call this every frame; if there's nothing
+to update it is very cheap.
+
+If =TWEAK_BAKE= is defined, =tweak::process= is a no-op and your compiler
+will optimize out any calls to it.
+
+* Tools Reference
+
+All of these tools operate on the =Tweakfile= and =Tweakfifo= in the
+working directory.
+
+** =tweak=
+
+Starts a GUI for tweaking the program's parameters.
+
+** =tweak-set NAME VALUE=
+
+Set one parameter.
+
+=NAME=
+    The parameter name as given to =TWEAK_FLOAT=.
+
+=VALUE=
+    Floating-point value to use. This will be read by C++'s
+    formatted extraction functions, and so will be parsed according to
+    your current locale.
+
+** =tweakc=
+
+Writes the current values of all parameters, formatted as a C++ header
+file, to standard output. Use this file in conjunction with the
+=TWEAK_BAKE= option to optimize out all of =libtweak= for production
+builds.
+
+* File Format
+
+Both =Tweakfile= and =Tweakfifo= have the same format: a list of lines
+where each line is a command name followed by a space-separated list
+of arguments. Possible commands are:
+
+** =set NAME VALUE=
+
+Specifies a value for a paramater.
+
+** =range NAME MIN MAX=
+
+Specifies the range for a parameter. This is only used by the GUI tool
+to display an appropriate GUI; values are not validated.
+
+* Further Work
+
+** Windows Support
+
+This library uses FIFOs which don't exist on Windows. The code is
+organized for easy porting, and full Windows support shouldn't be too much
+work.
+
+In production mode (with =TWEAK_BAKE= defined), Windows is supported,
+as =libtweak= becomes a trivial header-only library in that case. So,
+it's still possible to develop your program on Unix and support
+Windows as a release target.
+
+** Parameters other than floats
+
+Other parameter types that may be useful:
+
+Integers
+Strings
+Vectors
+Colours

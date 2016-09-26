@@ -2,6 +2,7 @@
 
 import os.path
 import tkinter as ui
+from tkinter import ttk
 from collections import defaultdict
 from functools import partial
 
@@ -56,18 +57,52 @@ class ScaleWidget(Widget):
     def __init__(self, root, param):
         super().__init__(param)
         minv, maxv = param.range or (-100, 100)
-        w = self.tk_widget = ui.Scale(
-            root,
+
+        w = self.tk_widget = self.frame = ttk.Frame(
+            root
+        )
+        w.columnconfigure(0,weight=0)
+        w.columnconfigure(1,weight=1)
+
+        w = self.scale = ttk.Scale(
+            self.frame,
             from_=minv,
             to=maxv,
             orient=ui.HORIZONTAL,
-            resolution=1 if param.type == 'int' else 0,
-            command=self.update
+            command=self.update_scale
         )
+        w.grid(row=0, column=1, sticky=ui.W+ui.E)
+
+        self.var = ui.IntVar()
+
+        w = self.readout = ttk.Label(
+            self.frame,
+            textvariable=self.var,
+            width=4
+        )
+        w.grid(row=0, column=0)
+
         self.set_str(param.value or '0')
 
+    def format(self, value):
+        if self.param.type == 'int':
+            return '%i' % int(float(value))
+        return '%.2f' % float(value)
+
     def set_str(self, s):
-        self.tk_widget.set(float(s))
+        self.scale.set(float(s))
+
+    def update_scale(self, s):
+        value = self.scale.get()
+
+        if self.param.type == 'int':
+            if int(value) != value:
+                value = round(value)
+                self.scale.set(value)
+                return
+
+        self.update(value)
+        self.var.set(self.format(value))
 
 
 class RawStringWidget(Widget):
@@ -76,7 +111,7 @@ class RawStringWidget(Widget):
         self.var = ui.StringVar()
         self.var.trace('w', self.trace)
 
-        w = self.tk_widget = ui.Entry(
+        w = self.tk_widget = ttk.Entry(
             root,
             textvariable=self.var
         )
@@ -107,7 +142,7 @@ class ToggleWidget(Widget):
         self.var = ui.IntVar()
         self.var.trace('w', self.trace)
 
-        w = self.tk_widget = ui.Checkbutton(
+        w = self.tk_widget = ttk.Checkbutton(
             root,
             variable=self.var
         )
@@ -117,10 +152,7 @@ class ToggleWidget(Widget):
         self.update(self.var.get())
 
     def set_str(self, s):
-        if s == '0':
-            self.tk_widget.deselect()
-        if s == '1':
-            self.tk_widget.select()
+        self.var.set(s)
 
 
 class Param:
@@ -219,6 +251,12 @@ if __name__ == '__main__':
     root = ui.Tk()
     root.title("Parameters")
 
+    z = ttk.Frame(root,padding=10)
+    z.grid(column=0,row=0,sticky=(ui.N,ui.S,ui.W,ui.E))
+    root.columnconfigure(0,weight=1)
+    root.rowconfigure(0,weight=1)
+    root=z
+
     widgets = {}
 
     def reset():
@@ -251,8 +289,8 @@ if __name__ == '__main__':
 
     for i, (name, param) in enumerate(sorted(params.items())):
 
-        w = ui.Label(root, text=name)
-        w.grid(row=i, column=0)
+        w = ttk.Label(root, text=name, padding = '0 0 10 0')
+        w.grid(row=i, column=0, sticky=ui.W)
 
         w = make_widget(param)
 
@@ -261,10 +299,10 @@ if __name__ == '__main__':
 
     ui.Grid.columnconfigure(root, 1, weight=1)
 
-    w = btn_save = ui.Button(root, text='Save Changes', command=update_file)
+    w = btn_save = ttk.Button(root, text='Save Changes', command=update_file)
     w.grid(row=i+1, column=0, columnspan=2, sticky=ui.W+ui.E)
 
-    w = btn_reset = ui.Button(root, text='Reset', command=reset, state=ui.DISABLED)
+    w = btn_reset = ttk.Button(root, text='Reset', command=reset, state=ui.DISABLED)
     w.grid(row=i+2, column=0, columnspan=2, sticky=ui.W+ui.E)
 
     root.mainloop()

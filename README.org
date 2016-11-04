@@ -29,8 +29,8 @@ Declare tweakable parameters in your program:
 
 #include <tweak.h>
 
-TWEAK(float, sausage_length, 1, 20)
-TWEAK(float, temperature, 0, 100)
+TWEAK(float, sausage_length)
+TWEAK(float, temperature)
 
 #+END_SRC
 

@@ -237,6 +237,7 @@ def read_tweakfile(path):
             param.get('range')
         )
         for name, param in params.items()
+        if 'type' in param
     }
 
 
@@ -306,4 +307,3 @@ if __name__ == '__main__':
     w.grid(row=i+2, column=0, columnspan=2, sticky=ui.W+ui.E)
 
     root.mainloop()
-

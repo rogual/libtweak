@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 import os.path
-import tkinter as ui
-from tkinter import ttk
+try:
+    import tkinter as ui
+    from tkinter import ttk
+except:
+    pass
 from collections import defaultdict
 from functools import partial
 

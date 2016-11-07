@@ -12,6 +12,7 @@ changes.
   - Full Support: Linux, Mac
   - Production mode only: All other platfoms
 - Extra Requirements: Python 3
+- [[https://gfycat.com/UniformBackCaracal][Demo animation]]
 
 * Compiling
 
@@ -263,7 +264,7 @@ so, you need to:
        static void save(const MyType &value, std::ostream &os) { /* ... */ }
      }
    }
-        
+
    #+END_SRC
 
 That's enough for =libtweak= to handle your type. You can now use it in

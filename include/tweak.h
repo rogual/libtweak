@@ -10,7 +10,7 @@
     namespace tweak
     {
         inline void init() {}
-        inline bool process() {}
+        inline void process() {}
     }
 
 #else

@@ -12,7 +12,6 @@ changes.
   - Full Support: Linux, Mac
   - Production mode only: All other platfoms
 - Extra Requirements: Python 3
-- [[https://gfycat.com/UniformBackCaracal][Demo animation]]
 
 * Compiling
 
